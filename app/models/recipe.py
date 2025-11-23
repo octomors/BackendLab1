@@ -18,11 +18,11 @@ class Recipe(Base):
         ForeignKey("cuisines.id"), nullable=True
     )
 
-    # __table_args__ = (
-    #     CheckConstraint(
-    #         "difficulty >= 1 AND difficulty <= 5", name="check_difficulty_range"
-    #     ),
-    # )
+    __table_args__ = (
+        CheckConstraint(
+            "difficulty >= 1 AND difficulty <= 5", name="check_difficulty_range"
+        ),
+    )
 
     def __repr__(self):
         return f"Recipe(id={self.id}, title={self.title})"
