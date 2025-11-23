@@ -7,6 +7,6 @@ router = APIRouter(
     prefix=settings.url.lab1a1,
 )
 
-@router.post("/items/", response_model=Item, status_code=status.HTTP_201_CREATED)
+@router.post("/items/")
 async def create_item(item: Item):
     return item
