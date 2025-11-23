@@ -6,15 +6,7 @@ from typing import List
 
 async def build_recipe_response_selective(recipe: Recipe, session: AsyncSession, includes: List[str]) -> dict:
     """
-    Build response body for a recipe with selective loading of related data.
-    
-    Args:
-        recipe: Recipe model instance
-        session: Database session
-        includes: List of related entities to include (cuisine, ingredients, allergens)
-    
-    Returns:
-        Dictionary with recipe data and requested related entities
+    Cтроит response body для рецепта с вложенной кухней, аллергенами и ингридиентами c возможностью выбора параметров
     """
     # Start with basic recipe fields
     recipe_dict = {
@@ -25,7 +17,6 @@ async def build_recipe_response_selective(recipe: Recipe, session: AsyncSession,
         "cooking_time": recipe.cooking_time,
     }
     
-    # Load cuisine if requested
     if "cuisine" in includes:
         cuisine = None
         if recipe.cuisine_id:
@@ -35,7 +26,6 @@ async def build_recipe_response_selective(recipe: Recipe, session: AsyncSession,
             cuisine = cuisine_result.scalar_one_or_none()
         recipe_dict["cuisine"] = {"id": cuisine.id, "name": cuisine.name} if cuisine else None
     
-    # Load allergens if requested
     if "allergens" in includes:
         allergen_links_result = await session.execute(
             select(RecipeAllergen).where(RecipeAllergen.recipe_id == recipe.id)
@@ -52,7 +42,6 @@ async def build_recipe_response_selective(recipe: Recipe, session: AsyncSession,
         
         recipe_dict["allergens"] = [{"id": a.id, "name": a.name} for a in allergens]
     
-    # Load ingredients if requested
     if "ingredients" in includes:
         recipe_ingredients_result = await session.execute(
             select(RecipeIngredient).where(RecipeIngredient.recipe_id == recipe.id)

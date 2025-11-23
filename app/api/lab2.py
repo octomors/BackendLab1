@@ -285,16 +285,15 @@ async def get_recipes(
     sort: Optional[str] = Query("-id", description="Sort field (use '-' prefix for descending)"),
     session: AsyncSession = Depends(db_helper.session_getter),
 ):
-    # Start with base query
+    # base query
     query = sql_select(Recipe)
     
-    # Apply text search filter
+    # text search filter
     if name__like:
         query = query.where(Recipe.title.ilike(f"%{name__like}%"))
     
-    # Apply ingredient filter
+    # ingredient filter
     if ingredient_id:
-        # Get recipe IDs that contain any of the specified ingredients
         recipe_ids_result = await session.execute(
             sql_select(RecipeIngredient.recipe_id)
             .where(RecipeIngredient.ingredient_id.in_(ingredient_id))
@@ -303,24 +302,21 @@ async def get_recipes(
         recipe_ids = [row[0] for row in recipe_ids_result.all()]
         
         if not recipe_ids:
-            # No recipes found with these ingredients - use empty list, pagination will handle it
             query = query.where(Recipe.id.in_([-1]))  # No match condition
         
         query = query.where(Recipe.id.in_(recipe_ids))
     
-    # Apply sorting
+    # sorting
     if sort:
         if sort.startswith("-"):
-            # Descending order
             field_name = sort[1:]
             if hasattr(Recipe, field_name):
                 query = query.order_by(getattr(Recipe, field_name).desc())
         else:
-            # Ascending order
             if hasattr(Recipe, sort):
                 query = query.order_by(getattr(Recipe, sort))
     
-    # Apply pagination using transformer to build response with related data
+    # pagination
     async def transformer(items):
         recipes_with_details = []
         for recipe in items:
@@ -353,7 +349,7 @@ async def get_recipes_by_ingredient(
     if not ingredient:
         raise HTTPException(status_code=404, detail="Ingredient not found")
 
-    # all recipe_ids that use this ingredient
+    # recipe_ids that use this ingredient
     recipe_ingredients_result = await session.execute(
         sql_select(RecipeIngredient).where(RecipeIngredient.ingredient_id == ingredient_id)
     )
@@ -364,30 +360,28 @@ async def get_recipes_by_ingredient(
     if not recipe_ids:
         return []
 
-    # all recipes that use this ingredient
+    # recipes that use this ingredient
     recipes_result = await session.execute(
         sql_select(Recipe).where(Recipe.id.in_(recipe_ids))
     )
     recipes = recipes_result.scalars().all()
 
-    # Parse include parameter
+    # include parameter
     includes = []
     if include:
         includes = [i.strip() for i in include.split(",")]
     
-    # Parse select parameter
+    # select parameter
     selected_fields = []
     if select:
         selected_fields = [f.strip() for f in select.split(",")]
     
-    # Build response with selective loading
+    # response
     response = []
     for recipe in recipes:
         if includes:
-            # Build response with only requested includes
             recipe_dict = await build_recipe_response_selective(recipe, session, includes)
         else:
-            # Build response with basic fields only (no related data)
             recipe_dict = {
                 "id": recipe.id,
                 "title": recipe.title,
@@ -396,7 +390,7 @@ async def get_recipes_by_ingredient(
                 "cooking_time": recipe.cooking_time,
             }
         
-        # Apply field selection if specified
+        # field selection
         if selected_fields:
             recipe_dict = {k: v for k, v in recipe_dict.items() if k in selected_fields}
         
