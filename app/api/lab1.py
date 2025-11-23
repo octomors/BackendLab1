@@ -1,4 +1,4 @@
-from models import db_helper, Recipe
+from models import db_helper, Recipe, Cuisine, Allergen, Ingredient, RecipeAllergen, RecipeIngredient
 from schemas import Item, FilterParams, FormData, RecipeCreate, RecipeUpdate, RecipeResponse
 from fastapi import FastAPI, APIRouter, Path, Query, Form, File, UploadFile, HTTPException, status, Depends
 from config import settings
@@ -119,11 +119,84 @@ async def create_recipe(
     recipe: RecipeCreate,
     session: AsyncSession = Depends(db_helper.session_getter)
 ):
-    db_recipe = Recipe(**recipe.model_dump())
+    # Create the recipe with base fields
+    recipe_data = recipe.model_dump(exclude={'allergen_ids', 'ingredients'})
+    db_recipe = Recipe(**recipe_data)
     session.add(db_recipe)
+    
+    # We need to flush to get the recipe ID
+    await session.flush()
+    
+    # Add allergen associations
+    for allergen_id in recipe.allergen_ids:
+        recipe_allergen = RecipeAllergen(recipe_id=db_recipe.id, allergen_id=allergen_id)
+        session.add(recipe_allergen)
+    
+    # Add ingredient associations
+    for ingredient_input in recipe.ingredients:
+        recipe_ingredient = RecipeIngredient(
+            recipe_id=db_recipe.id,
+            ingredient_id=ingredient_input.ingredient_id,
+            quantity=ingredient_input.quantity,
+            measurement=ingredient_input.measurement
+        )
+        session.add(recipe_ingredient)
+    
     await session.commit()
     await session.refresh(db_recipe)
-    return db_recipe
+    
+    return await build_recipe_response(db_recipe, session)
+
+# Helper function to build recipe response with nested data
+async def build_recipe_response(recipe: Recipe, session: AsyncSession):
+    # Get cuisine
+    cuisine = None
+    if recipe.cuisine_id:
+        cuisine_result = await session.execute(
+            select(Cuisine).where(Cuisine.id == recipe.cuisine_id)
+        )
+        cuisine = cuisine_result.scalar_one_or_none()
+    
+    # Get allergens
+    allergen_links_result = await session.execute(
+        select(RecipeAllergen).where(RecipeAllergen.recipe_id == recipe.id)
+    )
+    allergen_links = allergen_links_result.scalars().all()
+    allergen_ids = [link.allergen_id for link in allergen_links]
+    
+    allergens = []
+    if allergen_ids:
+        allergens_result = await session.execute(
+            select(Allergen).where(Allergen.id.in_(allergen_ids))
+        )
+        allergens = allergens_result.scalars().all()
+    
+    # Get ingredients
+    recipe_ingredients_result = await session.execute(
+        select(RecipeIngredient).where(RecipeIngredient.recipe_id == recipe.id)
+    )
+    recipe_ingredients = recipe_ingredients_result.scalars().all()
+    
+    ingredients = [
+        {
+            "id": ri.ingredient_id,
+            "quantity": ri.quantity,
+            "measurement": ri.measurement
+        }
+        for ri in recipe_ingredients
+    ]
+    
+    return {
+        "id": recipe.id,
+        "title": recipe.title,
+        "description": recipe.description,
+        "cooking_time": recipe.cooking_time,
+        "difficulty": recipe.difficulty,
+        "cuisine": {"id": cuisine.id, "name": cuisine.name} if cuisine else None,
+        "allergens": [{"id": a.id, "name": a.name} for a in allergens],
+        "ingredients": ingredients
+    }
+
 
 # Read all
 @router.get("/", response_model=List[RecipeResponse])
@@ -133,7 +206,15 @@ async def read_recipes(
     session: AsyncSession = Depends(db_helper.session_getter)
 ):
     result = await session.execute(select(Recipe).offset(skip).limit(limit))
-    return result.scalars().all()
+    recipes = result.scalars().all()
+    
+    response = []
+    for recipe in recipes:
+        recipe_response = await build_recipe_response(recipe, session)
+        response.append(recipe_response)
+    
+    return response
+
 
 # Read by ID
 @router.get("/{recipe_id}", response_model=RecipeResponse)
@@ -145,7 +226,8 @@ async def read_recipe(
     recipe = result.scalar_one_or_none()
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
-    return recipe
+    
+    return await build_recipe_response(recipe, session)
 
 # Update
 @router.put("/{recipe_id}", response_model=RecipeResponse)
