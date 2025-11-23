@@ -14,7 +14,9 @@ class Recipe(Base):
     description: Mapped[str] = mapped_column(Text)
     cooking_time: Mapped[int] = mapped_column(Integer)
     difficulty: Mapped[int] = mapped_column(Integer, default=1)
-    cuisine_id: Mapped[Optional[int]] = mapped_column(ForeignKey("cuisines.id"), nullable=True)
+    cuisine_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cuisines.id"), nullable=True
+    )
 
     # __table_args__ = (
     #     CheckConstraint(
