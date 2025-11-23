@@ -5,16 +5,9 @@ from models import Recipe, Cuisine, Allergen, RecipeAllergen, RecipeIngredient
 
 async def build_recipe_response(recipe: Recipe, session: AsyncSession) -> dict:
     """
-    Build a recipe response with nested cuisine, allergens, and ingredients data.
-
-    Args:
-        recipe: Recipe model instance
-        session: AsyncSession for database queries
-
-    Returns:
-        Dictionary with recipe data including nested relationships
+    Cтроит response body для рецепта с вложенной кухней, аллергенами и ингридиентами
     """
-    # Get cuisine
+
     cuisine = None
     if recipe.cuisine_id:
         cuisine_result = await session.execute(
@@ -22,7 +15,6 @@ async def build_recipe_response(recipe: Recipe, session: AsyncSession) -> dict:
         )
         cuisine = cuisine_result.scalar_one_or_none()
 
-    # Get allergens
     allergen_links_result = await session.execute(
         select(RecipeAllergen).where(RecipeAllergen.recipe_id == recipe.id)
     )
@@ -36,13 +28,11 @@ async def build_recipe_response(recipe: Recipe, session: AsyncSession) -> dict:
         )
         allergens = allergens_result.scalars().all()
 
-    # Get ingredients with their names
     recipe_ingredients_result = await session.execute(
         select(RecipeIngredient).where(RecipeIngredient.recipe_id == recipe.id)
     )
     recipe_ingredients = recipe_ingredients_result.scalars().all()
 
-    # Fetch ingredient details
     ingredient_ids = [ri.ingredient_id for ri in recipe_ingredients]
     ingredients_dict = {}
     if ingredient_ids:
