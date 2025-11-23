@@ -1,6 +1,33 @@
-from models import db_helper, Recipe
-from schemas import Item, FilterParams, FormData, RecipeCreate, RecipeUpdate, RecipeResponse
-from fastapi import FastAPI, APIRouter, Path, Query, Form, File, UploadFile, HTTPException, status, Depends
+from models import (
+    db_helper,
+    Recipe,
+    Cuisine,
+    Allergen,
+    Ingredient,
+    RecipeAllergen,
+    RecipeIngredient,
+)
+from schemas import (
+    Item,
+    FilterParams,
+    FormData,
+    RecipeCreate,
+    RecipeUpdate,
+    RecipeResponse,
+)
+from .recipe_utils import build_recipe_response
+from fastapi import (
+    FastAPI,
+    APIRouter,
+    Path,
+    Query,
+    Form,
+    File,
+    UploadFile,
+    HTTPException,
+    status,
+    Depends,
+)
 from config import settings
 from typing import Annotated, List
 from fastapi.responses import HTMLResponse, FileResponse
@@ -18,9 +45,11 @@ router = APIRouter(
 
 # ЧАСТЬ А1 ЧАСТЬ А1 ЧАСТЬ А1 ЧАСТЬ А1
 
+
 @router.post("/Body/")
 async def create_item(item: Item):
     return item
+
 
 @router.get("/QueryParamsAndValidation/")
 async def read_items(q: Annotated[str | None, Query(max_length=50)] = None):
@@ -29,12 +58,17 @@ async def read_items(q: Annotated[str | None, Query(max_length=50)] = None):
         results.update({"q": q})
     return results
 
+
 @router.get("/PathParamsAndValidation/{item_id}")
 async def read_items(
     *,
-    item_id: Annotated[int, Path(description="The ID of the item to get", ge=0, le=1000)],
+    item_id: Annotated[
+        int, Path(description="The ID of the item to get", ge=0, le=1000)
+    ],
     q: str,
-    size: Annotated[float, Query(gt=0, lt=10.5, description="Size must be between 0 and 10.5")]
+    size: Annotated[
+        float, Query(gt=0, lt=10.5, description="Size must be between 0 and 10.5")
+    ],
 ):
     results = {"item_id": item_id}
     if q:
@@ -43,29 +77,35 @@ async def read_items(
         results.update({"size": size})
     return results
 
+
 @router.get("/QueryParamsModels/")
 async def read_items(filter_query: Annotated[FilterParams, Query()]):
     return filter_query
+
 
 @router.put("/NestedModels/{item_id}")
 async def update_item(item_id: int, item: Item):
     results = {"item_id": item_id, "item": item}
     return results
 
+
 @router.post("/RequestForms/")
 async def login(username: Annotated[str, Form()], password: Annotated[str, Form()]):
     return {"username": username}
+
 
 @router.post("/RequstFormModels/")
 async def login(data: Annotated[FormData, Form()]):
     return data
 
+
 # ЧАСТЬ А2 ЧАСТЬ А2 ЧАСТЬ А2 ЧАСТЬ А2
+
 
 @router.get("/format-test")
 async def get_data_view(format: str = Query("json", regex="^(json|html)$")):
     data = {"message": "Hello from FastAPI!", "status": "success"}
-    
+
     if format == "html":
         html_content = f"""
         <html>
@@ -77,8 +117,9 @@ async def get_data_view(format: str = Query("json", regex="^(json|html)$")):
         </html>
         """
         return HTMLResponse(content=html_content)
-    
+
     return data
+
 
 # ЧАСТЬ А3 ЧАСТЬ А3 ЧАСТЬ А3 ЧАСТЬ А3
 
@@ -88,15 +129,16 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 
+
 def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 @router.post("/upload-image/")
 async def upload_image(file: UploadFile = File(...)):
     if not allowed_file(file.filename or ""):
         raise HTTPException(
-            status_code=400,
-            detail="Invalid file format. Allowed: PNG, JPG, JPEG, WEBP"
+            status_code=400, detail="Invalid file format. Allowed: PNG, JPG, JPEG, WEBP"
         )
 
     # генерация уникального имени
@@ -111,48 +153,83 @@ async def upload_image(file: UploadFile = File(...)):
     file_url = f"/uploads/{filename}"
     return {"url": file_url}
 
+
 # ЧАСТЬ B ЧАСТЬ B ЧАСТЬ B ЧАСТЬ B
+
 
 # Create
 @router.post("/", response_model=RecipeResponse, status_code=status.HTTP_201_CREATED)
 async def create_recipe(
-    recipe: RecipeCreate,
-    session: AsyncSession = Depends(db_helper.session_getter)
+    recipe: RecipeCreate, session: AsyncSession = Depends(db_helper.session_getter)
 ):
-    db_recipe = Recipe(**recipe.model_dump())
+    # Create the recipe with base fields
+    recipe_data = recipe.model_dump(exclude={"allergen_ids", "ingredients"})
+    db_recipe = Recipe(**recipe_data)
     session.add(db_recipe)
+
+    # We need to flush to get the recipe ID
+    await session.flush()
+
+    # Add allergen associations
+    for allergen_id in recipe.allergen_ids:
+        recipe_allergen = RecipeAllergen(
+            recipe_id=db_recipe.id, allergen_id=allergen_id
+        )
+        session.add(recipe_allergen)
+
+    # Add ingredient associations
+    for ingredient_input in recipe.ingredients:
+        recipe_ingredient = RecipeIngredient(
+            recipe_id=db_recipe.id,
+            ingredient_id=ingredient_input.ingredient_id,
+            quantity=ingredient_input.quantity,
+            measurement=ingredient_input.measurement,
+        )
+        session.add(recipe_ingredient)
+
     await session.commit()
     await session.refresh(db_recipe)
-    return db_recipe
+
+    return await build_recipe_response(db_recipe, session)
+
 
 # Read all
 @router.get("/", response_model=List[RecipeResponse])
 async def read_recipes(
     skip: int = 0,
     limit: int = 100,
-    session: AsyncSession = Depends(db_helper.session_getter)
+    session: AsyncSession = Depends(db_helper.session_getter),
 ):
     result = await session.execute(select(Recipe).offset(skip).limit(limit))
-    return result.scalars().all()
+    recipes = result.scalars().all()
+
+    response = []
+    for recipe in recipes:
+        recipe_response = await build_recipe_response(recipe, session)
+        response.append(recipe_response)
+
+    return response
+
 
 # Read by ID
 @router.get("/{recipe_id}", response_model=RecipeResponse)
 async def read_recipe(
-    recipe_id: int,
-    session: AsyncSession = Depends(db_helper.session_getter)
+    recipe_id: int, session: AsyncSession = Depends(db_helper.session_getter)
 ):
     result = await session.execute(select(Recipe).where(Recipe.id == recipe_id))
     recipe = result.scalar_one_or_none()
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
-    return recipe
+
+    return await build_recipe_response(recipe, session)
+
 
 # Update
 @router.put("/{recipe_id}", response_model=RecipeResponse)
 async def update_recipe(
     recipe_id: int,
     recipe_update: RecipeUpdate,
-    session: AsyncSession = Depends(db_helper.session_getter)
+    session: AsyncSession = Depends(db_helper.session_getter),
 ):
     result = await session.execute(select(Recipe).where(Recipe.id == recipe_id))
     db_recipe = result.scalar_one_or_none()
@@ -165,13 +242,13 @@ async def update_recipe(
 
     await session.commit()
     await session.refresh(db_recipe)
-    return db_recipe
+    return await build_recipe_response(db_recipe, session)
+
 
 # Delete
 @router.delete("/{recipe_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_recipe(
-    recipe_id: int,
-    session: AsyncSession = Depends(db_helper.session_getter)
+    recipe_id: int, session: AsyncSession = Depends(db_helper.session_getter)
 ):
     result = await session.execute(select(Recipe).where(Recipe.id == recipe_id))
     db_recipe = result.scalar_one_or_none()
