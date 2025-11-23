@@ -18,11 +18,14 @@ from schemas import (
     IngredientResponse,
     RecipeCreate,
     RecipeResponse,
+    RecipeFilter,
 )
-from fastapi import APIRouter, HTTPException, status, Depends
-from typing import List
+from fastapi import APIRouter, HTTPException, status, Depends, Query
+from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from fastapi_pagination import Page, add_pagination
+from fastapi_pagination.ext.sqlalchemy import paginate as apaginate
 from .recipe_utils import build_recipe_response
 
 router = APIRouter(
@@ -268,6 +271,68 @@ async def delete_ingredient(
     await session.delete(db_ingredient)
     await session.commit()
     return
+
+
+# ============================================================================
+# RECIPE endpoints
+# ============================================================================
+
+
+# Get all recipes with pagination, filtering, and sorting
+@router.get("/recipes", response_model=Page[RecipeResponse])
+async def get_recipes(
+    name__like: Optional[str] = Query(None, description="Search recipes by name (title)"),
+    ingredient_id: Optional[List[int]] = Query(None, description="Filter by ingredient IDs"),
+    sort: Optional[str] = Query("-id", description="Sort field (use '-' prefix for descending)"),
+    session: AsyncSession = Depends(db_helper.session_getter),
+):
+    # Start with base query
+    query = select(Recipe)
+    
+    # Apply text search filter
+    if name__like:
+        query = query.where(Recipe.title.ilike(f"%{name__like}%"))
+    
+    # Apply ingredient filter
+    if ingredient_id:
+        # Get recipe IDs that contain any of the specified ingredients
+        recipe_ids_result = await session.execute(
+            select(RecipeIngredient.recipe_id)
+            .where(RecipeIngredient.ingredient_id.in_(ingredient_id))
+            .distinct()
+        )
+        recipe_ids = [row[0] for row in recipe_ids_result.all()]
+        
+        if not recipe_ids:
+            # No recipes found with these ingredients
+            from fastapi_pagination import Page as PageType
+            return PageType(items=[], total=0, page=1, size=10)
+        
+        query = query.where(Recipe.id.in_(recipe_ids))
+    
+    # Apply sorting
+    if sort:
+        if sort.startswith("-"):
+            # Descending order
+            field_name = sort[1:]
+            if hasattr(Recipe, field_name):
+                query = query.order_by(getattr(Recipe, field_name).desc())
+        else:
+            # Ascending order
+            if hasattr(Recipe, sort):
+                query = query.order_by(getattr(Recipe, sort))
+    
+    # Apply pagination using transformer to build response with related data
+    async def transformer(items):
+        recipes_with_details = []
+        for recipe in items:
+            recipe_response = await build_recipe_response(recipe, session)
+            recipes_with_details.append(RecipeResponse(**recipe_response))
+        return recipes_with_details
+    
+    paginated_result = await apaginate(session, query, transformer=transformer)
+    
+    return paginated_result
 
 
 # ============================================================================
