@@ -43,8 +43,9 @@ router = APIRouter(
     prefix=settings.url.lab1a1,
 )
 
-# ЧАСТЬ А1 ЧАСТЬ А1 ЧАСТЬ А1 ЧАСТЬ А1
-
+# ============================================================================
+# ЧАСТЬ А1
+# ============================================================================
 
 @router.post("/Body/")
 async def create_item(item: Item):
@@ -98,9 +99,9 @@ async def login(username: Annotated[str, Form()], password: Annotated[str, Form(
 async def login(data: Annotated[FormData, Form()]):
     return data
 
-
-# ЧАСТЬ А2 ЧАСТЬ А2 ЧАСТЬ А2 ЧАСТЬ А2
-
+# ============================================================================
+# ЧАСТЬ А2
+# ============================================================================
 
 @router.get("/format-test")
 async def get_data_view(format: str = Query("json", regex="^(json|html)$")):
@@ -120,9 +121,9 @@ async def get_data_view(format: str = Query("json", regex="^(json|html)$")):
 
     return data
 
-
-# ЧАСТЬ А3 ЧАСТЬ А3 ЧАСТЬ А3 ЧАСТЬ А3
-
+# ============================================================================
+# ЧАСТЬ А3
+# ============================================================================
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -153,31 +154,31 @@ async def upload_image(file: UploadFile = File(...)):
     file_url = f"/uploads/{filename}"
     return {"url": file_url}
 
-
-# ЧАСТЬ B ЧАСТЬ B ЧАСТЬ B ЧАСТЬ B
-
+# ============================================================================
+# ЧАСТЬ B
+# ============================================================================
 
 # Create
 @router.post("/", response_model=RecipeResponse, status_code=status.HTTP_201_CREATED)
 async def create_recipe(
     recipe: RecipeCreate, session: AsyncSession = Depends(db_helper.session_getter)
 ):
-    # Create the recipe with base fields
+    
     recipe_data = recipe.model_dump(exclude={"allergen_ids", "ingredients"})
     db_recipe = Recipe(**recipe_data)
     session.add(db_recipe)
 
-    # We need to flush to get the recipe ID
+    
     await session.flush()
 
-    # Add allergen associations
+   
     for allergen_id in recipe.allergen_ids:
         recipe_allergen = RecipeAllergen(
             recipe_id=db_recipe.id, allergen_id=allergen_id
         )
         session.add(recipe_allergen)
 
-    # Add ingredient associations
+    
     for ingredient_input in recipe.ingredients:
         recipe_ingredient = RecipeIngredient(
             recipe_id=db_recipe.id,
@@ -256,4 +257,4 @@ async def delete_recipe(
         raise HTTPException(status_code=404, detail="Recipe not found")
     await session.delete(db_recipe)
     await session.commit()
-    return  # 204 — без тела
+    return 
