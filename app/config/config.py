@@ -21,7 +21,7 @@ class UrlPrefix(BaseModel):
     prefix: str = "/api"
     test: str = "/test"
     posts: str = "/posts"
-    lab1a1: str = "/lab1a1"
+    lab1a1: str = "/lab1"
 
 
 class Settings(BaseSettings):

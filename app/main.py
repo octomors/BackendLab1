@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 from models import db_helper, Base
 from api import router as api_router
 
+from fastapi.staticfiles import StaticFiles
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,6 +26,9 @@ main_app = FastAPI(
 main_app.include_router(
     api_router,
 )
+
+# Нужно для загрузки картинок в 1 лабе
+main_app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 if __name__ == "__main__":
