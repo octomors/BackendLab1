@@ -4,9 +4,7 @@ from models import (
     Allergen,
     Ingredient,
     Recipe,
-    RecipeAllergen,
     RecipeIngredient,
-    MeasurementEnum,
 )
 from schemas import (
     CuisineCreate,
@@ -22,10 +20,10 @@ from schemas import (
     RecipeResponse,
 )
 from fastapi import APIRouter, HTTPException, status, Depends
-from config import settings
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from .recipe_utils import build_recipe_response
 
 router = APIRouter(
     tags=["Lab2"],
@@ -306,59 +304,10 @@ async def get_recipes_by_ingredient(
     )
     recipes = recipes_result.scalars().all()
 
-    # Build response with nested data
+    # Build response with nested data using shared helper
     response = []
     for recipe in recipes:
-        # Get cuisine
-        cuisine = None
-        if recipe.cuisine_id:
-            cuisine_result = await session.execute(
-                select(Cuisine).where(Cuisine.id == recipe.cuisine_id)
-            )
-            cuisine = cuisine_result.scalar_one_or_none()
-
-        # Get allergens
-        allergen_links_result = await session.execute(
-            select(RecipeAllergen).where(RecipeAllergen.recipe_id == recipe.id)
-        )
-        allergen_links = allergen_links_result.scalars().all()
-        allergen_ids = [link.allergen_id for link in allergen_links]
-
-        allergens = []
-        if allergen_ids:
-            allergens_result = await session.execute(
-                select(Allergen).where(Allergen.id.in_(allergen_ids))
-            )
-            allergens = allergens_result.scalars().all()
-
-        # Get ingredients
-        recipe_ingredients_for_recipe_result = await session.execute(
-            select(RecipeIngredient).where(RecipeIngredient.recipe_id == recipe.id)
-        )
-        recipe_ingredients_for_recipe = (
-            recipe_ingredients_for_recipe_result.scalars().all()
-        )
-
-        ingredients = [
-            {
-                "id": ri.ingredient_id,
-                "quantity": ri.quantity,
-                "measurement": ri.measurement,
-            }
-            for ri in recipe_ingredients_for_recipe
-        ]
-
-        recipe_response = {
-            "id": recipe.id,
-            "title": recipe.title,
-            "description": recipe.description,
-            "cooking_time": recipe.cooking_time,
-            "difficulty": recipe.difficulty,
-            "cuisine": {"id": cuisine.id, "name": cuisine.name} if cuisine else None,
-            "allergens": [{"id": a.id, "name": a.name} for a in allergens],
-            "ingredients": ingredients,
-        }
-
+        recipe_response = await build_recipe_response(recipe, session)
         response.append(recipe_response)
 
     return response

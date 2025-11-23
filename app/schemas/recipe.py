@@ -1,11 +1,21 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 
 
 class RecipeIngredientInput(BaseModel):
     ingredient_id: int
     quantity: float = Field(..., gt=0)
-    measurement: int = Field(..., ge=1, le=3)
+    measurement: int
+
+    @field_validator("measurement")
+    @classmethod
+    def validate_measurement(cls, v: int) -> int:
+        # Validate against MeasurementEnum values (1, 2, 3)
+        if v not in (1, 2, 3):
+            raise ValueError(
+                "measurement must be 1 (GRAMS), 2 (PIECES), or 3 (MILLILITERS)"
+            )
+        return v
 
 
 class RecipeBase(BaseModel):
