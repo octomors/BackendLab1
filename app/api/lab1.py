@@ -1,12 +1,14 @@
-from models import Item, FilterParams, FormData
-from fastapi import FastAPI, APIRouter, Path, Query, Form, File, UploadFile, HTTPException
+from models import db_helper, Item, FilterParams, FormData, Recipe, RecipeCreate, RecipeUpdate, RecipeResponse
+from fastapi import FastAPI, APIRouter, Path, Query, Form, File, UploadFile, HTTPException, status, Depends
 from config import settings
-from typing import Annotated
+from typing import Annotated, List
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 import os
 import uuid
 from pathlib import Path
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 router = APIRouter(
     tags=["Lab1"],
@@ -107,3 +109,73 @@ async def upload_image(file: UploadFile = File(...)):
 
     file_url = f"/uploads/{filename}"
     return {"url": file_url}
+
+# ЧАСТЬ B ЧАСТЬ B ЧАСТЬ B ЧАСТЬ B
+
+# Create
+@router.post("/", response_model=RecipeResponse, status_code=status.HTTP_201_CREATED)
+async def create_recipe(
+    recipe: RecipeCreate,
+    session: AsyncSession = Depends(db_helper.session_getter)
+):
+    db_recipe = Recipe(**recipe.model_dump())
+    session.add(db_recipe)
+    await session.commit()
+    await session.refresh(db_recipe)
+    return db_recipe
+
+# Read all
+@router.get("/", response_model=List[RecipeResponse])
+async def read_recipes(
+    skip: int = 0,
+    limit: int = 100,
+    session: AsyncSession = Depends(db_helper.session_getter)
+):
+    result = await session.execute(select(Recipe).offset(skip).limit(limit))
+    return result.scalars().all()
+
+# Read by ID
+@router.get("/{recipe_id}", response_model=RecipeResponse)
+async def read_recipe(
+    recipe_id: int,
+    session: AsyncSession = Depends(db_helper.session_getter)
+):
+    result = await session.execute(select(Recipe).where(Recipe.id == recipe_id))
+    recipe = result.scalar_one_or_none()
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    return recipe
+
+# Update
+@router.put("/{recipe_id}", response_model=RecipeResponse)
+async def update_recipe(
+    recipe_id: int,
+    recipe_update: RecipeUpdate,
+    session: AsyncSession = Depends(db_helper.session_getter)
+):
+    result = await session.execute(select(Recipe).where(Recipe.id == recipe_id))
+    db_recipe = result.scalar_one_or_none()
+    if not db_recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+
+    update_data = recipe_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_recipe, key, value)
+
+    await session.commit()
+    await session.refresh(db_recipe)
+    return db_recipe
+
+# Delete
+@router.delete("/{recipe_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_recipe(
+    recipe_id: int,
+    session: AsyncSession = Depends(db_helper.session_getter)
+):
+    result = await session.execute(select(Recipe).where(Recipe.id == recipe_id))
+    db_recipe = result.scalar_one_or_none()
+    if not db_recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    await session.delete(db_recipe)
+    await session.commit()
+    return  # 204 — без тела
