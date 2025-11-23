@@ -36,14 +36,31 @@ async def build_recipe_response(recipe: Recipe, session: AsyncSession) -> dict:
         )
         allergens = allergens_result.scalars().all()
 
-    # Get ingredients
+    # Get ingredients with their names
     recipe_ingredients_result = await session.execute(
         select(RecipeIngredient).where(RecipeIngredient.recipe_id == recipe.id)
     )
     recipe_ingredients = recipe_ingredients_result.scalars().all()
 
+    # Fetch ingredient details
+    ingredient_ids = [ri.ingredient_id for ri in recipe_ingredients]
+    ingredients_dict = {}
+    if ingredient_ids:
+        from models import Ingredient
+
+        ingredients_result = await session.execute(
+            select(Ingredient).where(Ingredient.id.in_(ingredient_ids))
+        )
+        ingredients_list = ingredients_result.scalars().all()
+        ingredients_dict = {ing.id: ing.name for ing in ingredients_list}
+
     ingredients = [
-        {"id": ri.ingredient_id, "quantity": ri.quantity, "measurement": ri.measurement}
+        {
+            "id": ri.ingredient_id,
+            "name": ingredients_dict.get(ri.ingredient_id, ""),
+            "quantity": ri.quantity,
+            "measurement": ri.measurement,
+        }
         for ri in recipe_ingredients
     ]
 

@@ -56,6 +56,7 @@ class AllergenInRecipe(BaseModel):
 
 class IngredientInRecipe(BaseModel):
     id: int
+    name: str
     quantity: float
     measurement: int
 
