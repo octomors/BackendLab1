@@ -3,9 +3,11 @@ __all__ = (
     "Base",
     "Post",
     "Recipe",
+    "Item",
 )
 
 from .db_helper import db_helper
 from .base import Base
 from .post import Post
 from .recipe import Recipe
+from .item import Item
