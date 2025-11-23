@@ -23,10 +23,10 @@ from schemas import (
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select as sql_select
 from fastapi_pagination import Page, add_pagination
 from fastapi_pagination.ext.sqlalchemy import paginate as apaginate
-from .recipe_utils import build_recipe_response
+from .recipe_utils import build_recipe_response, build_recipe_response_selective
 
 router = APIRouter(
     tags=["Lab2"],
@@ -59,7 +59,7 @@ async def read_cuisines(
     limit: int = 100,
     session: AsyncSession = Depends(db_helper.session_getter),
 ):
-    result = await session.execute(select(Cuisine).offset(skip).limit(limit))
+    result = await session.execute(sql_select(Cuisine).offset(skip).limit(limit))
     return result.scalars().all()
 
 
@@ -68,7 +68,7 @@ async def read_cuisines(
 async def read_cuisine(
     cuisine_id: int, session: AsyncSession = Depends(db_helper.session_getter)
 ):
-    result = await session.execute(select(Cuisine).where(Cuisine.id == cuisine_id))
+    result = await session.execute(sql_select(Cuisine).where(Cuisine.id == cuisine_id))
     cuisine = result.scalar_one_or_none()
     if not cuisine:
         raise HTTPException(status_code=404, detail="Cuisine not found")
@@ -82,7 +82,7 @@ async def update_cuisine(
     cuisine_update: CuisineUpdate,
     session: AsyncSession = Depends(db_helper.session_getter),
 ):
-    result = await session.execute(select(Cuisine).where(Cuisine.id == cuisine_id))
+    result = await session.execute(sql_select(Cuisine).where(Cuisine.id == cuisine_id))
     db_cuisine = result.scalar_one_or_none()
     if not db_cuisine:
         raise HTTPException(status_code=404, detail="Cuisine not found")
@@ -101,7 +101,7 @@ async def update_cuisine(
 async def delete_cuisine(
     cuisine_id: int, session: AsyncSession = Depends(db_helper.session_getter)
 ):
-    result = await session.execute(select(Cuisine).where(Cuisine.id == cuisine_id))
+    result = await session.execute(sql_select(Cuisine).where(Cuisine.id == cuisine_id))
     db_cuisine = result.scalar_one_or_none()
     if not db_cuisine:
         raise HTTPException(status_code=404, detail="Cuisine not found")
@@ -136,7 +136,7 @@ async def read_allergens(
     limit: int = 100,
     session: AsyncSession = Depends(db_helper.session_getter),
 ):
-    result = await session.execute(select(Allergen).offset(skip).limit(limit))
+    result = await session.execute(sql_select(Allergen).offset(skip).limit(limit))
     return result.scalars().all()
 
 
@@ -145,7 +145,7 @@ async def read_allergens(
 async def read_allergen(
     allergen_id: int, session: AsyncSession = Depends(db_helper.session_getter)
 ):
-    result = await session.execute(select(Allergen).where(Allergen.id == allergen_id))
+    result = await session.execute(sql_select(Allergen).where(Allergen.id == allergen_id))
     allergen = result.scalar_one_or_none()
     if not allergen:
         raise HTTPException(status_code=404, detail="Allergen not found")
@@ -159,7 +159,7 @@ async def update_allergen(
     allergen_update: AllergenUpdate,
     session: AsyncSession = Depends(db_helper.session_getter),
 ):
-    result = await session.execute(select(Allergen).where(Allergen.id == allergen_id))
+    result = await session.execute(sql_select(Allergen).where(Allergen.id == allergen_id))
     db_allergen = result.scalar_one_or_none()
     if not db_allergen:
         raise HTTPException(status_code=404, detail="Allergen not found")
@@ -178,7 +178,7 @@ async def update_allergen(
 async def delete_allergen(
     allergen_id: int, session: AsyncSession = Depends(db_helper.session_getter)
 ):
-    result = await session.execute(select(Allergen).where(Allergen.id == allergen_id))
+    result = await session.execute(sql_select(Allergen).where(Allergen.id == allergen_id))
     db_allergen = result.scalar_one_or_none()
     if not db_allergen:
         raise HTTPException(status_code=404, detail="Allergen not found")
@@ -216,7 +216,7 @@ async def read_ingredients(
     limit: int = 100,
     session: AsyncSession = Depends(db_helper.session_getter),
 ):
-    result = await session.execute(select(Ingredient).offset(skip).limit(limit))
+    result = await session.execute(sql_select(Ingredient).offset(skip).limit(limit))
     return result.scalars().all()
 
 
@@ -226,7 +226,7 @@ async def read_ingredient(
     ingredient_id: int, session: AsyncSession = Depends(db_helper.session_getter)
 ):
     result = await session.execute(
-        select(Ingredient).where(Ingredient.id == ingredient_id)
+        sql_select(Ingredient).where(Ingredient.id == ingredient_id)
     )
     ingredient = result.scalar_one_or_none()
     if not ingredient:
@@ -242,7 +242,7 @@ async def update_ingredient(
     session: AsyncSession = Depends(db_helper.session_getter),
 ):
     result = await session.execute(
-        select(Ingredient).where(Ingredient.id == ingredient_id)
+        sql_select(Ingredient).where(Ingredient.id == ingredient_id)
     )
     db_ingredient = result.scalar_one_or_none()
     if not db_ingredient:
@@ -263,7 +263,7 @@ async def delete_ingredient(
     ingredient_id: int, session: AsyncSession = Depends(db_helper.session_getter)
 ):
     result = await session.execute(
-        select(Ingredient).where(Ingredient.id == ingredient_id)
+        sql_select(Ingredient).where(Ingredient.id == ingredient_id)
     )
     db_ingredient = result.scalar_one_or_none()
     if not db_ingredient:
@@ -287,7 +287,7 @@ async def get_recipes(
     session: AsyncSession = Depends(db_helper.session_getter),
 ):
     # Start with base query
-    query = select(Recipe)
+    query = sql_select(Recipe)
     
     # Apply text search filter
     if name__like:
@@ -297,7 +297,7 @@ async def get_recipes(
     if ingredient_id:
         # Get recipe IDs that contain any of the specified ingredients
         recipe_ids_result = await session.execute(
-            select(RecipeIngredient.recipe_id)
+            sql_select(RecipeIngredient.recipe_id)
             .where(RecipeIngredient.ingredient_id.in_(ingredient_id))
             .distinct()
         )
@@ -340,13 +340,16 @@ async def get_recipes(
 # ============================================================================
 
 
-@router.get("/ingredients/{ingredient_id}/recipes", response_model=List[RecipeResponse])
+@router.get("/ingredients/{ingredient_id}/recipes")
 async def get_recipes_by_ingredient(
-    ingredient_id: int, session: AsyncSession = Depends(db_helper.session_getter)
+    ingredient_id: int,
+    include: Optional[str] = Query(None, description="Comma-separated list of related entities to include: cuisine, ingredients, allergens"),
+    select: Optional[str] = Query(None, description="Comma-separated list of fields to return: id, title, difficulty, description, cooking_time"),
+    session: AsyncSession = Depends(db_helper.session_getter)
 ):
     # check if ingredient exists
     ingredient_result = await session.execute(
-        select(Ingredient).where(Ingredient.id == ingredient_id)
+        sql_select(Ingredient).where(Ingredient.id == ingredient_id)
     )
     ingredient = ingredient_result.scalar_one_or_none()
     if not ingredient:
@@ -354,7 +357,7 @@ async def get_recipes_by_ingredient(
 
     # all recipe_ids that use this ingredient
     recipe_ingredients_result = await session.execute(
-        select(RecipeIngredient).where(RecipeIngredient.ingredient_id == ingredient_id)
+        sql_select(RecipeIngredient).where(RecipeIngredient.ingredient_id == ingredient_id)
     )
     recipe_ingredients = recipe_ingredients_result.scalars().all()
 
@@ -363,16 +366,42 @@ async def get_recipes_by_ingredient(
     if not recipe_ids:
         return []
 
-    # all recipes that use this igridient
+    # all recipes that use this ingredient
     recipes_result = await session.execute(
-        select(Recipe).where(Recipe.id.in_(recipe_ids))
+        sql_select(Recipe).where(Recipe.id.in_(recipe_ids))
     )
     recipes = recipes_result.scalars().all()
 
-    # response
+    # Parse include parameter
+    includes = []
+    if include:
+        includes = [i.strip() for i in include.split(",")]
+    
+    # Parse select parameter
+    selected_fields = []
+    if select:
+        selected_fields = [f.strip() for f in select.split(",")]
+    
+    # Build response with selective loading
     response = []
     for recipe in recipes:
-        recipe_response = await build_recipe_response(recipe, session)
-        response.append(recipe_response)
+        if includes:
+            # Build response with only requested includes
+            recipe_dict = await build_recipe_response_selective(recipe, session, includes)
+        else:
+            # Build response with basic fields only (no related data)
+            recipe_dict = {
+                "id": recipe.id,
+                "title": recipe.title,
+                "difficulty": recipe.difficulty,
+                "description": recipe.description,
+                "cooking_time": recipe.cooking_time,
+            }
+        
+        # Apply field selection if specified
+        if selected_fields:
+            recipe_dict = {k: v for k, v in recipe_dict.items() if k in selected_fields}
+        
+        response.append(recipe_dict)
 
     return response
