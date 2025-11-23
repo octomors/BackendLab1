@@ -10,7 +10,7 @@ from .lab2 import router as lab2_router
 router = APIRouter(
     prefix=settings.url.prefix,
 )
-router.include_router(test_router)
-router.include_router(posts_router)
+#router.include_router(test_router)
+#router.include_router(posts_router)
 router.include_router(lab1_router)
 router.include_router(lab2_router)
