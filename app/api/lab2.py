@@ -18,7 +18,6 @@ from schemas import (
     IngredientResponse,
     RecipeCreate,
     RecipeResponse,
-    RecipeFilter,
 )
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import List, Optional
@@ -304,9 +303,8 @@ async def get_recipes(
         recipe_ids = [row[0] for row in recipe_ids_result.all()]
         
         if not recipe_ids:
-            # No recipes found with these ingredients
-            from fastapi_pagination import Page as PageType
-            return PageType(items=[], total=0, page=1, size=10)
+            # No recipes found with these ingredients - use empty list, pagination will handle it
+            query = query.where(Recipe.id.in_([-1]))  # No match condition
         
         query = query.where(Recipe.id.in_(recipe_ids))
     
