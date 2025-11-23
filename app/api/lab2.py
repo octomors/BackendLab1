@@ -271,7 +271,7 @@ async def delete_ingredient(
 
 
 # ============================================================================
-# TASK D: Get recipes by ingredient
+# Get recipes by ingredient
 # ============================================================================
 
 
@@ -279,7 +279,7 @@ async def delete_ingredient(
 async def get_recipes_by_ingredient(
     ingredient_id: int, session: AsyncSession = Depends(db_helper.session_getter)
 ):
-    # First check if ingredient exists
+    # check if ingredient exists
     ingredient_result = await session.execute(
         select(Ingredient).where(Ingredient.id == ingredient_id)
     )
@@ -287,7 +287,7 @@ async def get_recipes_by_ingredient(
     if not ingredient:
         raise HTTPException(status_code=404, detail="Ingredient not found")
 
-    # Get all recipe_ids that use this ingredient
+    # all recipe_ids that use this ingredient
     recipe_ingredients_result = await session.execute(
         select(RecipeIngredient).where(RecipeIngredient.ingredient_id == ingredient_id)
     )
@@ -298,13 +298,13 @@ async def get_recipes_by_ingredient(
     if not recipe_ids:
         return []
 
-    # Get all recipes with these IDs
+    # all recipes that use this igridient
     recipes_result = await session.execute(
         select(Recipe).where(Recipe.id.in_(recipe_ids))
     )
     recipes = recipes_result.scalars().all()
 
-    # Build response with nested data using shared helper
+    # response
     response = []
     for recipe in recipes:
         recipe_response = await build_recipe_response(recipe, session)
