@@ -17,6 +17,9 @@ class Recipe(Base):
     cuisine_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("cuisines.id"), nullable=True
     )
+    author_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False
+    )
 
     __table_args__ = (
         CheckConstraint(

@@ -26,6 +26,18 @@ async def build_recipe_response_selective(recipe: Recipe, session: AsyncSession,
             cuisine = cuisine_result.scalar_one_or_none()
         recipe_dict["cuisine"] = {"id": cuisine.id, "name": cuisine.name} if cuisine else None
     
+    if "author" in includes:
+        from models import User
+        author_result = await session.execute(
+            select(User).where(User.id == recipe.author_id)
+        )
+        author = author_result.scalar_one_or_none()
+        recipe_dict["author"] = {
+            "id": author.id,
+            "first_name": author.first_name,
+            "last_name": author.last_name,
+        } if author else None
+    
     if "allergens" in includes:
         allergen_links_result = await session.execute(
             select(RecipeAllergen).where(RecipeAllergen.recipe_id == recipe.id)
@@ -85,6 +97,13 @@ async def build_recipe_response(recipe: Recipe, session: AsyncSession) -> dict:
         )
         cuisine = cuisine_result.scalar_one_or_none()
 
+    # Get author information
+    from models import User
+    author_result = await session.execute(
+        select(User).where(User.id == recipe.author_id)
+    )
+    author = author_result.scalar_one_or_none()
+
     allergen_links_result = await session.execute(
         select(RecipeAllergen).where(RecipeAllergen.recipe_id == recipe.id)
     )
@@ -131,6 +150,11 @@ async def build_recipe_response(recipe: Recipe, session: AsyncSession) -> dict:
         "cooking_time": recipe.cooking_time,
         "difficulty": recipe.difficulty,
         "cuisine": {"id": cuisine.id, "name": cuisine.name} if cuisine else None,
+        "author": {
+            "id": author.id,
+            "first_name": author.first_name,
+            "last_name": author.last_name,
+        } if author else None,
         "allergens": [{"id": a.id, "name": a.name} for a in allergens],
         "ingredients": ingredients,
     }
