@@ -18,7 +18,7 @@ class Recipe(Base):
         ForeignKey("cuisines.id"), nullable=True
     )
     author_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), nullable=False
+        ForeignKey("user.id"), nullable=False
     )
 
     __table_args__ = (
