@@ -337,7 +337,7 @@ async def get_recipes(
 @router.get("/ingredients/{ingredient_id}/recipes")
 async def get_recipes_by_ingredient(
     ingredient_id: int,
-    include: Optional[str] = Query(None, description="Comma-separated list of related entities to include: cuisine, ingredients, allergens"),
+    include: Optional[str] = Query(None, description="Comma-separated list of related entities to include: cuisine, ingredients, allergens, author"),
     select: Optional[str] = Query(None, description="Comma-separated list of fields to return: id, title, difficulty, description, cooking_time"),
     session: AsyncSession = Depends(db_helper.session_getter)
 ):
