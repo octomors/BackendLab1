@@ -64,9 +64,19 @@ class IngredientInRecipe(BaseModel):
         from_attributes = True
 
 
+class AuthorInRecipe(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+
+    class Config:
+        from_attributes = True
+
+
 class RecipeResponse(RecipeBase):
     id: int
     cuisine: Optional[CuisineInRecipe] = None
+    author: AuthorInRecipe
     allergens: List[AllergenInRecipe] = []
     ingredients: List[IngredientInRecipe] = []
 

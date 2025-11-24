@@ -6,6 +6,7 @@ from models import (
     Ingredient,
     RecipeAllergen,
     RecipeIngredient,
+    User,
 )
 from schemas import (
     Item,
@@ -16,6 +17,7 @@ from schemas import (
     RecipeResponse,
 )
 from .recipe_utils import build_recipe_response
+from authentication.fastapi_users import current_active_user
 from fastapi import (
     FastAPI,
     APIRouter,
@@ -161,10 +163,13 @@ async def upload_image(file: UploadFile = File(...)):
 # Create
 @router.post("/", response_model=RecipeResponse, status_code=status.HTTP_201_CREATED)
 async def create_recipe(
-    recipe: RecipeCreate, session: AsyncSession = Depends(db_helper.session_getter)
+    recipe: RecipeCreate,
+    session: AsyncSession = Depends(db_helper.session_getter),
+    user: User = Depends(current_active_user),
 ):
     
     recipe_data = recipe.model_dump(exclude={"allergen_ids", "ingredients"})
+    recipe_data["author_id"] = user.id
     db_recipe = Recipe(**recipe_data)
     session.add(db_recipe)
 
@@ -231,11 +236,16 @@ async def update_recipe(
     recipe_id: int,
     recipe_update: RecipeUpdate,
     session: AsyncSession = Depends(db_helper.session_getter),
+    user: User = Depends(current_active_user),
 ):
     result = await session.execute(select(Recipe).where(Recipe.id == recipe_id))
     db_recipe = result.scalar_one_or_none()
     if not db_recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
+    
+    # Check if user is the author
+    if db_recipe.author_id != user.id:
+        raise HTTPException(status_code=403, detail="You can only update your own recipes")
 
     update_data = recipe_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -249,12 +259,19 @@ async def update_recipe(
 # Delete
 @router.delete("/{recipe_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_recipe(
-    recipe_id: int, session: AsyncSession = Depends(db_helper.session_getter)
+    recipe_id: int,
+    session: AsyncSession = Depends(db_helper.session_getter),
+    user: User = Depends(current_active_user),
 ):
     result = await session.execute(select(Recipe).where(Recipe.id == recipe_id))
     db_recipe = result.scalar_one_or_none()
     if not db_recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
+    
+    # Check if user is the author
+    if db_recipe.author_id != user.id:
+        raise HTTPException(status_code=403, detail="You can only delete your own recipes")
+    
     await session.delete(db_recipe)
     await session.commit()
     return 

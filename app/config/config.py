@@ -17,11 +17,26 @@ class DatabaseConfig(BaseModel):
     future: bool = True
 
 
+class AccessTokenConfig(BaseModel):
+    lifetime_seconds: int = 3600
+    reset_password_token_secret: str = "RESET_PASSWORD_SECRET"
+    verification_token_secret: str = "VERIFICATION_SECRET"
+
+
+class AuthConfig(BaseModel):
+    cookie_max_age: int = 3600
+    cookie_secure: bool = False
+    cookie_samesite: str = "lax"
+
+
 class UrlPrefix(BaseModel):
     prefix: str = "/api"
     test: str = "/test"
     posts: str = "/posts"
     lab1a1: str = "/lab1"
+    auth: str = "/auth"
+    users: str = "/users"
+    bearer_token_url: str = "/api/auth/login"
 
 
 class Settings(BaseSettings):
@@ -34,6 +49,8 @@ class Settings(BaseSettings):
     run: RunConfig = RunConfig()
     url: UrlPrefix = UrlPrefix()
     db: DatabaseConfig
+    access_token: AccessTokenConfig = AccessTokenConfig()
+    auth: AuthConfig = AuthConfig()
 
 
 settings = Settings()
