@@ -4,17 +4,23 @@ from config import settings
 
 from .test import router as test_router
 from .posts import router as posts_router
-from .lab1 import router as lab1_router
-from .lab2 import router as lab2_router
 from .auth import router as auth_router
 from .users import router as users_router
+from .recipes import router as recipes_router
+from .cuisines import router as cuisines_router
+from .allergens import router as allergens_router
+from .ingredients import router as ingredients_router
+from .lab1_misc import router as lab1_misc_router
 
 router = APIRouter(
     prefix=settings.url.prefix,
 )
 #router.include_router(test_router)
 #router.include_router(posts_router)
-router.include_router(lab1_router)
-router.include_router(lab2_router)
+router.include_router(recipes_router)
+router.include_router(cuisines_router)
+router.include_router(allergens_router)
+router.include_router(ingredients_router)
+router.include_router(lab1_misc_router)
 router.include_router(auth_router)
 router.include_router(users_router)
