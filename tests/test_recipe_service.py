@@ -4,6 +4,9 @@ Tests for RecipeService class.
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi_pagination import Page, Params
+from fastapi_pagination.api import set_params, set_page
+from fastapi_pagination.utils import disable_installed_extensions_check
 
 import sys
 import os
@@ -11,12 +14,16 @@ import os
 # Add app directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'app'))
 
+# Disable extension check for testing
+disable_installed_extensions_check()
+
 from services.recipe_service import RecipeService
 from models.recipe import Recipe
 from models.cuisine import Cuisine
 from models.allergen import Allergen
 from models.ingredient import Ingredient
 from models.users import User
+from schemas.recipe import RecipeResponse
 
 
 class TestBuildRecipeResponse:
@@ -488,3 +495,231 @@ class TestGetRecipesByIngredient:
             assert "title" in recipe
             assert "cuisine" in recipe
             assert "description" not in recipe
+
+
+class TestGetPaginatedRecipes:
+    """Tests for get_paginated_recipes method."""
+    
+    @pytest.mark.asyncio
+    async def test_get_paginated_recipes_no_filters(
+        self,
+        session: AsyncSession,
+        multiple_recipes: list[Recipe],
+    ):
+        """Test getting paginated recipes without any filters."""
+        service = RecipeService(session)
+        
+        # Set up pagination context
+        with set_page(Page[RecipeResponse]), set_params(Params(page=1, size=50)):
+            result = await service.get_paginated_recipes()
+        
+        assert result.total == 3
+        assert len(result.items) == 3
+    
+    @pytest.mark.asyncio
+    async def test_get_paginated_recipes_filter_by_name(
+        self,
+        session: AsyncSession,
+        multiple_recipes: list[Recipe],
+    ):
+        """Test getting paginated recipes with name filter."""
+        service = RecipeService(session)
+        
+        with set_page(Page[RecipeResponse]), set_params(Params(page=1, size=50)):
+            result = await service.get_paginated_recipes(name__like="Spaghetti")
+        
+        assert result.total == 1
+        assert result.items[0].title == "Spaghetti Carbonara"
+    
+    @pytest.mark.asyncio
+    async def test_get_paginated_recipes_filter_by_name_case_insensitive(
+        self,
+        session: AsyncSession,
+        multiple_recipes: list[Recipe],
+    ):
+        """Test that name filter is case insensitive."""
+        service = RecipeService(session)
+        
+        with set_page(Page[RecipeResponse]), set_params(Params(page=1, size=50)):
+            result = await service.get_paginated_recipes(name__like="SPAGHETTI")
+        
+        assert result.total == 1
+        assert result.items[0].title == "Spaghetti Carbonara"
+    
+    @pytest.mark.asyncio
+    async def test_get_paginated_recipes_filter_by_name_no_match(
+        self,
+        session: AsyncSession,
+        multiple_recipes: list[Recipe],
+    ):
+        """Test getting paginated recipes with name filter that has no matches."""
+        service = RecipeService(session)
+        
+        with set_page(Page[RecipeResponse]), set_params(Params(page=1, size=50)):
+            result = await service.get_paginated_recipes(name__like="Nonexistent Recipe")
+        
+        assert result.total == 0
+        assert len(result.items) == 0
+    
+    @pytest.mark.asyncio
+    async def test_get_paginated_recipes_filter_by_ingredient(
+        self,
+        session: AsyncSession,
+        multiple_recipes: list[Recipe],
+        sample_ingredients: list[Ingredient],
+    ):
+        """Test getting paginated recipes filtered by ingredient."""
+        service = RecipeService(session)
+        
+        with set_page(Page[RecipeResponse]), set_params(Params(page=1, size=50)):
+            # Filter by Cheese (ingredient_id=3) - should return 2 recipes
+            result = await service.get_paginated_recipes(
+                ingredient_id=[sample_ingredients[2].id]
+            )
+        
+        assert result.total == 2
+        titles = [item.title for item in result.items]
+        assert "Spaghetti Carbonara" in titles
+        assert "Margherita Pizza" in titles
+    
+    @pytest.mark.asyncio
+    async def test_get_paginated_recipes_filter_by_multiple_ingredients(
+        self,
+        session: AsyncSession,
+        multiple_recipes: list[Recipe],
+        sample_ingredients: list[Ingredient],
+    ):
+        """Test getting paginated recipes filtered by multiple ingredients."""
+        service = RecipeService(session)
+        
+        with set_page(Page[RecipeResponse]), set_params(Params(page=1, size=50)):
+            # Filter by Pasta and Cheese - should return recipes with either
+            result = await service.get_paginated_recipes(
+                ingredient_id=[sample_ingredients[0].id, sample_ingredients[2].id]
+            )
+        
+        assert result.total == 2
+    
+    @pytest.mark.asyncio
+    async def test_get_paginated_recipes_filter_by_nonexistent_ingredient(
+        self,
+        session: AsyncSession,
+        multiple_recipes: list[Recipe],
+    ):
+        """Test getting paginated recipes with non-existent ingredient filter."""
+        service = RecipeService(session)
+        
+        with set_page(Page[RecipeResponse]), set_params(Params(page=1, size=50)):
+            result = await service.get_paginated_recipes(ingredient_id=[9999])
+        
+        assert result.total == 0
+        assert len(result.items) == 0
+    
+    @pytest.mark.asyncio
+    async def test_get_paginated_recipes_sort_by_id_ascending(
+        self,
+        session: AsyncSession,
+        multiple_recipes: list[Recipe],
+    ):
+        """Test sorting recipes by ID ascending."""
+        service = RecipeService(session)
+        
+        with set_page(Page[RecipeResponse]), set_params(Params(page=1, size=50)):
+            result = await service.get_paginated_recipes(sort="id")
+        
+        assert result.total == 3
+        assert result.items[0].id < result.items[1].id < result.items[2].id
+    
+    @pytest.mark.asyncio
+    async def test_get_paginated_recipes_sort_by_id_descending(
+        self,
+        session: AsyncSession,
+        multiple_recipes: list[Recipe],
+    ):
+        """Test sorting recipes by ID descending."""
+        service = RecipeService(session)
+        
+        with set_page(Page[RecipeResponse]), set_params(Params(page=1, size=50)):
+            result = await service.get_paginated_recipes(sort="-id")
+        
+        assert result.total == 3
+        assert result.items[0].id > result.items[1].id > result.items[2].id
+    
+    @pytest.mark.asyncio
+    async def test_get_paginated_recipes_sort_by_title(
+        self,
+        session: AsyncSession,
+        multiple_recipes: list[Recipe],
+    ):
+        """Test sorting recipes by title."""
+        service = RecipeService(session)
+        
+        with set_page(Page[RecipeResponse]), set_params(Params(page=1, size=50)):
+            result = await service.get_paginated_recipes(sort="title")
+        
+        assert result.total == 3
+        # Caesar Salad < Margherita Pizza < Spaghetti Carbonara
+        assert result.items[0].title == "Caesar Salad"
+        assert result.items[1].title == "Margherita Pizza"
+        assert result.items[2].title == "Spaghetti Carbonara"
+    
+    @pytest.mark.asyncio
+    async def test_get_paginated_recipes_sort_by_cooking_time(
+        self,
+        session: AsyncSession,
+        multiple_recipes: list[Recipe],
+    ):
+        """Test sorting recipes by cooking time."""
+        service = RecipeService(session)
+        
+        with set_page(Page[RecipeResponse]), set_params(Params(page=1, size=50)):
+            result = await service.get_paginated_recipes(sort="cooking_time")
+        
+        assert result.total == 3
+        # Caesar Salad (15) < Spaghetti Carbonara (30) < Margherita Pizza (45)
+        assert result.items[0].cooking_time <= result.items[1].cooking_time
+        assert result.items[1].cooking_time <= result.items[2].cooking_time
+    
+    @pytest.mark.asyncio
+    async def test_get_paginated_recipes_combined_filters(
+        self,
+        session: AsyncSession,
+        multiple_recipes: list[Recipe],
+        sample_ingredients: list[Ingredient],
+    ):
+        """Test getting paginated recipes with combined name and ingredient filters."""
+        service = RecipeService(session)
+        
+        with set_page(Page[RecipeResponse]), set_params(Params(page=1, size=50)):
+            # Filter by name containing "Pizza" and ingredient Cheese
+            result = await service.get_paginated_recipes(
+                name__like="Pizza",
+                ingredient_id=[sample_ingredients[2].id]  # Cheese
+            )
+        
+        assert result.total == 1
+        assert result.items[0].title == "Margherita Pizza"
+    
+    @pytest.mark.asyncio
+    async def test_get_paginated_recipes_response_includes_all_fields(
+        self,
+        session: AsyncSession,
+        multiple_recipes: list[Recipe],
+    ):
+        """Test that paginated response includes all expected fields."""
+        service = RecipeService(session)
+        
+        with set_page(Page[RecipeResponse]), set_params(Params(page=1, size=50)):
+            result = await service.get_paginated_recipes()
+        
+        # Check that response items have all expected fields
+        item = result.items[0]
+        assert hasattr(item, 'id')
+        assert hasattr(item, 'title')
+        assert hasattr(item, 'description')
+        assert hasattr(item, 'cooking_time')
+        assert hasattr(item, 'difficulty')
+        assert hasattr(item, 'cuisine')
+        assert hasattr(item, 'author')
+        assert hasattr(item, 'allergens')
+        assert hasattr(item, 'ingredients')
